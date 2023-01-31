@@ -4,6 +4,7 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 #include "parser.h"
 
@@ -25,20 +26,24 @@ smash_load_file_in_memory(const char *filename, size_t *data_size)
 		goto err;
 
 	*data_size = finfo.st_size;
+	close(fd);
 	return data;
 err:
+	close(fd);
 	return NULL;
 }
 
 static void *
 smash_parse_delay_cfg(char *data, size_t data_size)
 {
+	munmap(data, data_size);
 	return NULL;
 }
 
 static void *
 smash_parse_failure_cfg(char *data, size_t data_size)
 {
+	munmap(data, data_size);
 	return NULL;
 }
 
