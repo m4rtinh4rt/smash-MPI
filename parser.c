@@ -58,7 +58,7 @@ smash_parse_delay_cfg(char *data, size_t data_size)
 		line++;
 		// TODO: populate structure for delays
 	}
-	if (pt) {
+	if (*pt) {
 		regerror(ret, &r, err_buf, 100);
 		fprintf(stderr, "line %d: %s\n", line, err_buf);
 		goto err;
@@ -94,7 +94,7 @@ smash_parse_failure_cfg(char *data, size_t data_size)
 		line++;
 		// TODO: populate structure for failures
 	}
-	if (pt) {
+	if (*pt) {
 		regerror(ret, &r, err_buf, 100);
 		fprintf(stderr, "line %d: %s\n", line, err_buf);
 		goto err;
