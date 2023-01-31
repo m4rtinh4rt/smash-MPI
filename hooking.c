@@ -1,7 +1,6 @@
 #include <dlfcn.h>
 #include <err.h>
 #include <gnu/lib-names.h>
-#include <mpi.h>
 #include <stdlib.h>
 
 void *
