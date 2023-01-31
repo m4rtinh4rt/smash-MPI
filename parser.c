@@ -5,6 +5,7 @@
 #include <sys/stat.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <regex.h>
 
 #include "parser.h"
 
@@ -36,6 +37,35 @@ err:
 static void *
 smash_parse_delay_cfg(char *data, size_t data_size)
 {
+	int ret, line;
+	regex_t r;
+	regmatch_t rm[5];
+	char err_buf[100];
+	char *pt;
+
+	const char *rs = "([0-9]+);([0-9]+);([0-9]+);(-?[0-9]+)";
+
+	if ((ret = regcomp(&r, rs, REG_EXTENDED)) != 0) {
+		regerror(ret, &r, err_buf, 100);
+		fprintf(stderr, "failed to compile regex <%s>:%s\n", rs, err_buf);
+		goto err;
+	}
+
+	pt = data;
+	line = 1;
+	while(!(ret = regexec(&r, pt, 3, rm, 0))) {
+		pt += rm[0].rm_eo + 1;
+		line++;
+		// TODO: populate structure for delays
+	}
+	if (pt) {
+		regerror(ret, &r, err_buf, 100);
+		fprintf(stderr, "line %d: %s\n", line, err_buf);
+		goto err;
+	}
+
+err:
+	regfree(&r);
 	munmap(data, data_size);
 	return NULL;
 }
@@ -43,6 +73,35 @@ smash_parse_delay_cfg(char *data, size_t data_size)
 static void *
 smash_parse_failure_cfg(char *data, size_t data_size)
 {
+	int ret, line;
+	regex_t r;
+	regmatch_t rm[3];
+	char err_buf[100];
+	char *pt;
+
+	const char *rs = "([0-9]+);([0-9]+)";
+
+	if ((ret = regcomp(&r, rs, REG_EXTENDED)) != 0) {
+		regerror(ret, &r, err_buf, 100);
+		fprintf(stderr, "failed to compile regex <%s>:%s\n", rs, err_buf);
+		goto err;
+	}
+
+	pt = data;
+	line = 1;
+	while(!(ret = regexec(&r, pt, 3, rm, 0))) {
+		pt += rm[0].rm_eo + 1;
+		line++;
+		// TODO: populate structure for failures
+	}
+	if (pt) {
+		regerror(ret, &r, err_buf, 100);
+		fprintf(stderr, "line %d: %s\n", line, err_buf);
+		goto err;
+	}
+
+err:
+	regfree(&r);
 	munmap(data, data_size);
 	return NULL;
 }
