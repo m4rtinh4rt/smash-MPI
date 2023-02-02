@@ -34,23 +34,6 @@ err:
 	return NULL;
 }
 
-static void *
-smash_getline(void *data, size_t offset, size_t *new_offset) 
-{
-	char *pdata;
-
-	if (!*((char *)data + offset + 1)) {
-		return NULL;
-	}
-
-	for (pdata = (char *)data + offset; *pdata && *pdata != '\n'; ++pdata)
-		continue;
-
-	*pdata = '\0'; /* '\n' -> EOL needed to look like a string for your regex. */
-	*new_offset = pdata + 1 - ((char *)data + offset);
-	return data + offset;
-}
-
 static void
 smash_populate_delay(/*structure pointer to populate, regmatch_t *rm*/)
 {
