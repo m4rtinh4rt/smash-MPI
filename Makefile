@@ -2,7 +2,7 @@ TARGET	:= smash-MPI.so
 CC	:= mpicc
 CFLAGS	:= -std=c99 -fPIC -Wall -c -I.
 LIB	:= -ldl
-SRC	:= hooking.c
+SRC	:= $(wildcard *.c)
 OBJ	:= $(SRC:.c=.o)
 
 .DEFAULT_GOAL	:= $(TARGET)
