@@ -8,4 +8,15 @@ enum CFG { CFG_DELAY, CFG_FAILURE };
 
 void *smash_parse_cfg(enum CFG ctype);
 
+struct cfg_delay {
+	unsigned long int delay;
+	unsigned int src, dst;
+	int msg;
+};
+
+struct cfg_failure {
+	unsigned long int time;
+	unsigned int node;
+};
+
 #endif /* PARSER_H */
