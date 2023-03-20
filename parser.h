@@ -19,4 +19,31 @@ struct cfg_failure {
 	unsigned int node;
 };
 
+/*
+ * Structure tail padding optimization 
+ * with flexible array member, valid in C99.
+ *
+ * To allocate do: 
+ *
+ *  struct cfg_delays *delays;
+ *
+ *  delays = malloc(sizeof(struct cfg_delay) + VECTOR_SIZE);
+ *  delays->size = VECTOR_SIZE;
+ *
+ *  and to free everything do:
+ *  free(delays)
+ *
+ *  Where VECTOR_SIZE is the number of lines in one config file.
+ */
+
+struct cfg_delays {
+	unsigned int size;
+	struct cfg_delay delays[];
+};
+
+struct cfg_failures {
+	unsigned int size;
+	struct cfg_failure failures[];
+};
+
 #endif /* PARSER_H */
