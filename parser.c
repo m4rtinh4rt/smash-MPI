@@ -57,17 +57,30 @@ smash_get_config_path(enum CFG ctype)
 	return getenv((ctype == CFG_DELAY ? CFG_DELAY_PATH : CFG_FAILURE_PATH));
 }
 
+static int
+count_lines(const char *rs)
+{
+	int lines = 0;
+	while (*(rs)++ != '\0')
+		if (*rs == '\n' || *rs == '\r')
+			lines++;
+	return lines;
+}
+
 void *
 smash_parse_cfg(enum CFG ctype)
 {
+	struct cfg_delays *delays;
+	struct cfg_failures *failures;
 	void *data;
-	int ret;
+	int ret, lines;
 	size_t data_size, nline, n_cfg;
 	char *config_path, *line, err_buf[100];
 	const char *rs;
 	regex_t r;
 	regmatch_t rm[5];
-	void (*f)(/*struct pointer, regmatch_t*/);
+	void (*f)();
+	void *cfg;
 
 	if (!(config_path = smash_get_config_path(ctype)))
 		return NULL;
@@ -75,11 +88,21 @@ smash_parse_cfg(enum CFG ctype)
 	if (!(data = smash_load_file_in_memory(config_path, &data_size)))
 		return NULL;
 
+	lines = count_lines(data);
+	cfg = malloc(ctype == CFG_DELAY ? sizeof(struct cfg_delays) +
+					      lines * sizeof(struct cfg_delay)
+					: sizeof(struct cfg_failures) +
+					      lines * sizeof(struct cfg_delay));
+
 	if (ctype == CFG_DELAY) {
+		delays = cfg;
+		delays->size = lines;
 		rs = "([0-9]+);([0-9]+);([0-9]+);(-?[0-9]+)";
 		n_cfg = 5;
 		f = smash_populate_delay;
 	} else {
+		failures = cfg;
+		failures->size = lines;
 		rs = "([0-9]+);([0-9]+)";
 		n_cfg = 3;
 		f = smash_populate_failure;
@@ -92,23 +115,23 @@ smash_parse_cfg(enum CFG ctype)
 		goto err;
 	}
 
-	nline = 1;
+	nline = 0;
 	line = strtok(data, "\n");
 	while (line) {
 		// if line is a comment or snaphot, do smth
 		if ((ret = regexec(&r, line, n_cfg, rm, 0)) != 0) {
 			regerror(ret, &r, err_buf, 100);
-			fprintf(stderr, "line %ld: %s\n", nline, err_buf);
+			fprintf(stderr, "line %ld: %s\n", nline + 1, err_buf);
 			goto err;
 		}
-		// TODO: call f(&struct to populate)
+		f(line, nline, rm, cfg);
 		nline++;
 		line = strtok(NULL, "\n");
 	}
 
 	regfree(&r);
 	munmap(data, data_size);
-	// TODO: return structure
+	return cfg;
 err:
 	regfree(&r);
 	munmap(data, data_size);
