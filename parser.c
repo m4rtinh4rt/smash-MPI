@@ -36,15 +36,19 @@ err:
 }
 
 static void
-smash_populate_delay(/*structure pointer to populate, regmatch_t *rm*/)
+smash_populate_delay(const char *line, size_t n, const regmatch_t *rm, struct cfg_delays *delays)
 {
-	// TODO
+	delays->delays[n].src = strtol(line + rm[1].rm_so, NULL, 10);
+	delays->delays[n].dst = strtol(line + rm[2].rm_so, NULL, 10);
+	delays->delays[n].delay = strtol(line + rm[3].rm_so, NULL, 10);
+	delays->delays[n].msg = strtol(line + rm[4].rm_so, NULL, 10);
 }
 
 static void
-smash_populate_failure(/*structure pointer to populate, regmatch_t *rm*/)
+smash_populate_failure(const char *line, size_t n, const regmatch_t *rm, struct cfg_failures *failures)
 {
-	// TODO
+	failures->failures[n].node = strtol(line + rm[1].rm_so, NULL, 10);
+	failures->failures[n].time = strtol(line + rm[2].rm_so, NULL, 10);
 }
 
 static char *
