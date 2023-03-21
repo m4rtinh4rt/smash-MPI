@@ -23,7 +23,7 @@ smash_load_file_in_memory(const char *filename, size_t *data_size)
 	if (fstat(fd, &finfo) < 0)
 		goto err;
 
-	if ((data = mmap(NULL, finfo.st_size, PROT_READ, MAP_PRIVATE, fd, 0))
+	if ((data = mmap(NULL, finfo.st_size, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0))
 			== MAP_FAILED)
 		goto err;
 
