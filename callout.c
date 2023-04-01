@@ -1,16 +1,33 @@
 #include "callout.h"
 
-struct callo callout[NCALL];
+#include <stdio.h>
+
+/* TODO: Add a NULL member struct to the end of the callout struct in the parsing */
+struct callo callout[NCALL] = { 0 };
+
+void
+print_callo(struct callo *c)
+{
+	printf("c_time: %i\nc_arg: %i\nc_func @ %p\n\n", c->c_time, c->c_arg,
+	       (void *)&c->c_func);
+}
+
+void
+print_callout(void)
+{
+	size_t i;
+
+	for (i = 0; callout[i].c_func != NULL; ++i)
+		print_callo(&callout[i]);
+}
 
 void
 timeout(int (*func)(), int arg, int time)
 {
         struct callo *p1, *p2;
         int t;
-        int s;
 
         t = time;
-        // s = PS->integ;
         p1 = &callout[0];
         while(p1->c_func != 0 && p1->c_time <= t) {
                 t -= p1->c_time;
@@ -29,5 +46,40 @@ timeout(int (*func)(), int arg, int time)
         p1->c_time = t;
         p1->c_func = func;
         p1->c_arg = arg;
-        // PS->integ = s;
+}
+
+
+/*
+void
+clock(void)
+{
+	struct callo *p = &callout[0];
+
+	p->c_time--;
+
+	while (p->c_func) {
+		if (p->c_time == 0) {
+			p->c_func();
+		}
+		p++;
+	}
+}
+*/
+
+void clock(void)
+{
+	extern int iaflags, idleflag;
+	register struct callo *p1;
+	register int *pc;
+
+	if (callout[0].c_func != 0) {
+		p1 = &callout[0];
+		while (p1->c_time < 0 && p1->c_func != 0)
+			p1++;
+		p1->c_time--;
+		if (p1->c_time == 0 && p1->c_func != 0) {
+			p1->c_func();
+			p1->c_time--;
+		}
+	}
 }
