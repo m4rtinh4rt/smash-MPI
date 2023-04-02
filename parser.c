@@ -119,7 +119,7 @@ smash_parse_cfg(enum CFG ctype)
 	nline = 0;
 	line = strtok(data, "\n");
 	while (line) {
-		// if line is a comment or snaphot, do smth
+		/* if line is a comment or snaphot, do smth */
 		if ((ret = regexec(&r, line, n_cfg, rm, 0)) != 0) {
 			regerror(ret, &r, err_buf, 100);
 			fprintf(stderr, "line %ld: %s\n", nline + 1, err_buf);
