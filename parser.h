@@ -27,7 +27,7 @@ struct cfg_failure {
  *
  *  struct cfg_delays *delays;
  *
- *  delays = malloc(sizeof(struct cfg_delay) + VECTOR_SIZE);
+ *  delays = malloc(sizeof(struct cfg_delays) + VECTOR_SIZE * sizeof(config_delay));
  *  delays->size = VECTOR_SIZE;
  *
  *  and to free everything do:
