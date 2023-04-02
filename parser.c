@@ -18,20 +18,21 @@ smash_load_file_in_memory(const char *filename, size_t *data_size)
 	struct stat finfo;
 
 	if ((fd = open(filename, O_RDONLY, S_IRUSR | S_IWUSR)) < 0)
-		goto err;
+		goto err1;
 
 	if (fstat(fd, &finfo) < 0)
-		goto err;
+		goto err2;
 
 	if ((data = mmap(NULL, finfo.st_size, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0))
 			== MAP_FAILED)
-		goto err;
+		goto err2;
 
 	*data_size = finfo.st_size;
 	close(fd);
 	return data;
-err:
+err2:
 	close(fd);
+err1:
 	return NULL;
 }
 
