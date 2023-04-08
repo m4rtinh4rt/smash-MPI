@@ -48,24 +48,6 @@ timeout(int (*func)(), int arg, int time)
         p1->c_arg = arg;
 }
 
-
-/*
-void
-clock(void)
-{
-	struct callo *p = &callout[0];
-
-	p->c_time--;
-
-	while (p->c_func) {
-		if (p->c_time == 0) {
-			p->c_func();
-		}
-		p++;
-	}
-}
-*/
-
 void clock(void)
 {
 	extern int iaflags, idleflag;
