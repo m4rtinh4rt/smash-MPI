@@ -13,7 +13,7 @@ print_callo(struct callo *c)
 }
 
 void
-print_callout(void)
+smash_print_callout(void)
 {
 	size_t i;
 
@@ -22,7 +22,7 @@ print_callout(void)
 }
 
 void
-timeout(int (*func)(), int arg, int time)
+smash_timeout(int (*func)(), int arg, int time)
 {
         struct callo *p1, *p2;
         int t;
@@ -48,7 +48,8 @@ timeout(int (*func)(), int arg, int time)
         p1->c_arg = arg;
 }
 
-void clock(void)
+void
+smash_clock(void)
 {
 	extern int iaflags, idleflag;
 	register struct callo *p1;

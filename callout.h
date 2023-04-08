@@ -9,10 +9,10 @@ struct callo {
 	int (*c_func)();    /* routine */
 };
 
-void print_callout(void);
+void smash_print_callout(void);
 
-void timeout(int (*func)(), int arg, int time);
+void smash_timeout(int (*func)(), int arg, int time);
 
-void clock(void);
+void smash_clock(void);
 
 #endif /* CALLOUT_H */
