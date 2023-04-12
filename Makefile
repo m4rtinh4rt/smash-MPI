@@ -1,6 +1,6 @@
 TARGET	:= smash-MPI.so
 CC	:= mpicc
-CFLAGS	:= -std=c99 -fPIC -Wall -c -I.
+CFLAGS	:= -std=gnu99 -fPIC -Wall -Wextra -c -I.
 LIB	:= -ldl
 SRC	:= $(wildcard *.c)
 OBJ	:= $(SRC:.c=.o)
