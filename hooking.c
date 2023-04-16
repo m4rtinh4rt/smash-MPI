@@ -11,25 +11,26 @@
 #include "hooking.h"
 #include "parser.h"
 
+struct cfg_delays *smash_delays;
+
 void *
 smash_get_lib_func(const char *lname, const char *fname)
 {
 	void *lib, *p;
 
 	if (!(lib = dlopen(lname, RTLD_LAZY)))
-		err(EXIT_FAILURE, "%s", dlerror());
+		errx(EXIT_FAILURE, "%s", dlerror());
 
 	if (!(p = dlsym(lib, fname)))
-		err(EXIT_FAILURE, "%s", dlerror());
+		errx(EXIT_FAILURE, "%s", dlerror());
 
 	dlclose(lib);
 	return p;
 }
 
 static void
-smash_handler(int signum)
+smash_handler(__attribute__((unused)) int signum)
 {
-	puts("SIGALRM");
 	smash_clock();
 	alarm(1);
 }
@@ -49,19 +50,34 @@ smash_setup_alarm(void)
 
 int
 __libc_start_main(
-    int (*main)(int, char **, char **),
-    int argc,
-    char **argv,
-    int (*init)(int, char **, char **),
-    void (*fini)(void),
-    void (*rtld_fini)(void),
-    void *stack_end)
+	int (*main)(int, char **, char **),
+	int argc,
+	char **argv,
+	int (*init)(int, char **, char **),
+	void (*fini)(void),
+	void (*rtld_fini)(void),
+	void *stack_end)
 {
-    int (*f)();
+	int (*f)();
 
-    f = smash_get_lib_func(LIBM_SO, "__libc_start_main");
-    smash_setup_alarm();
-    return f(main, argc, argv, init, fini, rtld_fini, stack_end);
+	if (!(smash_delays = smash_parse_cfg(CFG_DELAY)))
+		errx(EXIT_FAILURE, "error in CFG_DELAY\n");
+
+	f = smash_get_lib_func(LIBSTD, "__libc_start_main");
+	smash_setup_alarm();
+	return f(main, argc, argv, init, fini, rtld_fini, stack_end);
+}
+
+void
+exit(int status)
+{
+	void (*f)(int);
+
+	f = smash_get_lib_func(LIBSTD, "MPI_Send");
+	free(smash_delays);
+	f(status);
+	/* This is never reached */
+	while (1) continue;
 }
 
 int
@@ -70,7 +86,6 @@ MPI_Send(const void *buf, int count, MPI_Datatype datatype, int dest,
 {
 	int (*f)(), my_rank;
 	unsigned int i;
-	struct cfg_delays *delays;
 	struct mpi_send_args args = {
 		.buf = (void *)buf,
 		.count = count,
@@ -82,16 +97,14 @@ MPI_Send(const void *buf, int count, MPI_Datatype datatype, int dest,
 
 	f = smash_get_lib_func(LIBMPI, "MPI_Send");
 	MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
-	delays = smash_parse_cfg(CFG_DELAY);
-	if (delays == NULL) {
-		fprintf(stderr, "error in CFG_DELAY\n");
-		exit(1);
-	}
-	for (i = 0; i < delays->size; ++i) {
-		if (delays->delays[i].dst == (unsigned int)dest && delays->delays[i].src == (unsigned int)my_rank) {
-			smash_timeout(f, 6, delays->delays[i].delay, &args);
+
+	for (i = 0; i < smash_delays->size; ++i) {
+		/* If a delay in the config file matches our rank and the target rank, inject it in the callout struct. */
+		if (smash_delays->delays[i].dst == (unsigned int)dest && smash_delays->delays[i].src == (unsigned int)my_rank) {
+			smash_timeout(f, 6, smash_delays->delays[i].delay, &args);
 			return 0;
 		}
 	}
+	/* If there is no delay to apply, call MPI_Send directly. */
 	return f(buf, count, datatype, dest, tag, comm);
 }
