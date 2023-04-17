@@ -58,16 +58,18 @@ smash_clock(void)
 
 	if (callout[0].c_func != 0) {
 		p1 = &callout[0];
-		while (p1->c_time < 0 && p1->c_func != 0)
+		/* Ignore tasks that have already run. */
+		while (p1->c_time == -0xdead && p1->c_func != 0)
 			p1++;
-		p1->c_time--;
+
+		p1->c_time -= SMASH_CLOCK;
 		if (p1->c_time == 0 && p1->c_func != 0) {
 			/* This is called by multiple processes */
                         p1->c_func(p1->c_send_args.buf, p1->c_send_args.count,
                                    p1->c_send_args.datatype, p1->c_send_args.dest,
                                    p1->c_send_args.tag, p1->c_send_args.comm);
 			/* Then ignore for the next round, by setting a negative timeout */
-                        p1->c_time--;
+                        p1->c_time = -0xdead;
 		}
 	}
 }

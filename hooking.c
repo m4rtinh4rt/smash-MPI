@@ -32,7 +32,6 @@ static void
 smash_handler(__attribute__((unused)) int signum)
 {
 	smash_clock();
-	alarm(1);
 }
 
 void
@@ -45,7 +44,7 @@ smash_setup_alarm(void)
 	sa.sa_flags = SA_RESTART;
 
 	sigaction(SIGALRM, &sa, NULL);
-	alarm(1);
+	ualarm(SMASH_CLOCK, SMASH_CLOCK);
 }
 
 int
