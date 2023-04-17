@@ -68,16 +68,14 @@ __libc_start_main(
 	return f(main, argc, argv, init, fini, rtld_fini, stack_end);
 }
 
-void
-exit(int status)
+int
+MPI_Finalize(void)
 {
-	void (*f)(int);
+	int (*f)(void);
 
-	f = smash_get_lib_func(LIBSTD, "MPI_Send");
 	free(smash_delays);
-	f(status);
-	/* This is never reached */
-	while (1) continue;
+	f = smash_get_lib_func(LIBMPI, "MPI_Finalize");
+	return f();
 }
 
 int
