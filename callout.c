@@ -62,7 +62,7 @@ smash_clock(void)
 		while (p1->c_time == -0xdead && p1->c_func != 0)
 			p1++;
 
-		p1->c_time -= SMASH_CLOCK;
+		p1->c_time = ((p1->c_time - SMASH_CLOCK) < 0) ? 0 : p1->c_time - SMASH_CLOCK;
 		if (p1->c_time == 0 && p1->c_func != 0) {
 			/* This is called by multiple processes */
                         p1->c_func(p1->c_send_args.buf, p1->c_send_args.count,
