@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <semaphore.h>
 
 /* TODO: Add a NULL member struct to the end of the callout struct in the parsing */
 struct callo callout[NCALL] = { 0 };
@@ -30,15 +31,15 @@ smash_timeout(int (*func)(), int arg, int time, struct mpi_send_args *args)
 
         t = time;
         p1 = &callout[0];
-        while(p1->c_func != 0 && p1->c_time <= t) {
+        while (p1->c_func != 0 && p1->c_time <= t) {
                 t -= p1->c_time;
                 p1++;
         }
         p1->c_time -= t;
         p2 = p1;
-        while(p2->c_func != 0)
+        while (p2->c_func != 0)
                 p2++;
-        while(p2 >= p1) {
+        while (p2 >= p1) {
                 (p2+1)->c_time = p2->c_time;
                 (p2+1)->c_func = p2->c_func;
                 (p2+1)->c_arg = p2->c_arg;
@@ -49,6 +50,7 @@ smash_timeout(int (*func)(), int arg, int time, struct mpi_send_args *args)
         p1->c_func = func;
         p1->c_arg = arg;
 	memcpy(&p1->c_send_args, args, sizeof(struct mpi_send_args));
+	sem_wait(&p1->c_lock);
 }
 
 void
@@ -68,6 +70,7 @@ smash_clock(void)
                         p1->c_func(p1->c_send_args.buf, p1->c_send_args.count,
                                    p1->c_send_args.datatype, p1->c_send_args.dest,
                                    p1->c_send_args.tag, p1->c_send_args.comm);
+			sem_post(&p1->c_lock);
 			/* Then ignore for the next round, by setting a negative timeout */
                         p1->c_time = -0xdead;
 		}

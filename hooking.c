@@ -97,6 +97,7 @@ MPI_Send(const void *buf, int count, MPI_Datatype datatype, int dest,
 
 	for (i = 0; i < smash_delays->size; ++i) {
 		/* If a delay in the config file matches our rank and the target rank, inject it in the callout struct. */
+		/* FIXME: need do inspect content of the callout table. */
 		if (smash_delays->delays[i].dst == (unsigned int)dest && smash_delays->delays[i].src == (unsigned int)my_rank) {
 			smash_timeout(f, 6, smash_delays->delays[i].delay, &args);
 			return 0;
