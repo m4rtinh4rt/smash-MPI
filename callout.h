@@ -5,6 +5,7 @@
 #define SMASH_CLOCK 100000
 
 #include <mpi.h>
+#include <semaphore.h>
 
 struct mpi_send_args {
 	void *buf;
@@ -18,6 +19,7 @@ struct callo {
 	int c_time;                       /* incremental time */
 	int c_arg;                        /* argument to routine */
 	int (*c_func)();                  /* routine */
+	sem_t c_lock;			  /* lock to preserve locking semantic */
 	struct mpi_send_args c_send_args; /* args for MPI_Send */
 };
 
