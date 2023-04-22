@@ -12,6 +12,7 @@
 #include "parser.h"
 
 struct cfg_delays *smash_delays;
+int smash_alarm;
 
 void *
 smash_get_lib_func(const char *lname, const char *fname)
@@ -63,7 +64,7 @@ __libc_start_main(
 		errx(EXIT_FAILURE, "error in CFG_DELAY\n");
 
 	f = smash_get_lib_func(LIBSTD, "__libc_start_main");
-	smash_setup_alarm();
+	smash_alarm = 0;
 	return f(main, argc, argv, init, fini, rtld_fini, stack_end);
 }
 
@@ -94,6 +95,11 @@ MPI_Send(const void *buf, int count, MPI_Datatype datatype, int dest,
 
 	f = smash_get_lib_func(LIBMPI, "MPI_Send");
 	MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
+
+	if (!smash_alarm) {
+		smash_setup_alarm();
+		smash_alarm = 1;
+	}
 
 	for (i = 0; i < smash_delays->size; ++i) {
 		/* If a delay in the config file matches our rank and the target rank, inject it in the callout struct. */
