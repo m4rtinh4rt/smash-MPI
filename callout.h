@@ -1,8 +1,8 @@
 #ifndef CALLOUT_H
 #define CALLOUT_H
 
-#define NCALL 10 /* FIXME: Change size */
-#define SMASH_CLOCK 100000
+#define NCALL 256
+#define SMASH_CLOCK 100000 /* TODO: remove interval, jump to next timer directly */
 
 #include <mpi.h>
 #include <semaphore.h>
@@ -15,8 +15,7 @@ struct mpi_send_args {
 };
 
 struct callo {
-	/* FIXME: change c_time to a bigger type. */
-	int c_time;                       /* incremental time */
+	long long c_time;                 /* incremental time */
 	int c_arg;                        /* argument to routine */
 	int (*c_func)();                  /* routine */
 	sem_t c_lock;			  /* lock to preserve locking semantic */
@@ -25,8 +24,8 @@ struct callo {
 
 void smash_print_callout(void);
 
-void smash_timeout(int (*func)(), int arg, int time,
-                   struct mpi_send_args *args);
+sem_t *smash_timeout(int (*func)(), int arg, int time,
+                     struct mpi_send_args *args);
 
 void smash_clock(void);
 

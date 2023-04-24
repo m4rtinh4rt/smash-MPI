@@ -4,13 +4,12 @@
 #include <string.h>
 #include <semaphore.h>
 
-/* TODO: Add a NULL member struct to the end of the callout struct in the parsing */
 struct callo callout[NCALL] = { 0 };
 
 void
 print_callo(struct callo *c)
 {
-	printf("c_time: %i\nc_arg: %i\nc_func @ %p\n\n", c->c_time, c->c_arg,
+	printf("c_time: %lli\nc_arg: %i\nc_func @ %p\n\n", c->c_time, c->c_arg,
 	       (void *)&c->c_func);
 }
 
@@ -23,7 +22,7 @@ smash_print_callout(void)
 		print_callo(&callout[i]);
 }
 
-void
+sem_t *
 smash_timeout(int (*func)(), int arg, int time, struct mpi_send_args *args)
 {
         struct callo *p1, *p2;
@@ -50,7 +49,7 @@ smash_timeout(int (*func)(), int arg, int time, struct mpi_send_args *args)
         p1->c_func = func;
         p1->c_arg = arg;
 	memcpy(&p1->c_send_args, args, sizeof(struct mpi_send_args));
-	sem_wait(&p1->c_lock);
+	return &p1->c_lock;
 }
 
 void

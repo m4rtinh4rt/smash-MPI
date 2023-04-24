@@ -79,6 +79,40 @@ MPI_Finalize(void)
 }
 
 int
+MPI_Ssend(const void *buf, int count, MPI_Datatype datatype, int dest,
+             int tag, MPI_Comm comm)
+{
+	int (*f)(), my_rank;
+	unsigned int i;
+	struct mpi_send_args args = {
+		.buf = (void *)buf,
+		.count = count,
+		.datatype = datatype,
+		.dest = dest,
+		.tag = tag,
+		.comm = comm,
+	};
+
+	f = smash_get_lib_func(LIBMPI, "MPI_Ssend");
+	MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
+
+	if (!smash_alarm) {
+		smash_setup_alarm();
+		smash_alarm = 1;
+	}
+
+	for (i = 0; i < smash_delays->size; ++i) {
+		/* If a delay in the config file matches our rank and the target rank, inject it in the callout struct. */
+		if (smash_delays->delays[i].dst == (unsigned int)dest && smash_delays->delays[i].src == (unsigned int)my_rank) {
+			sem_wait(smash_timeout(f, 6, smash_delays->delays[i].delay, &args));
+			return 0;
+		}
+	}
+	/* If there is no delay to apply, call MPI_Send directly. */
+	return f(buf, count, datatype, dest, tag, comm);
+}
+
+int
 MPI_Send(const void *buf, int count, MPI_Datatype datatype, int dest,
              int tag, MPI_Comm comm)
 {
@@ -103,7 +137,6 @@ MPI_Send(const void *buf, int count, MPI_Datatype datatype, int dest,
 
 	for (i = 0; i < smash_delays->size; ++i) {
 		/* If a delay in the config file matches our rank and the target rank, inject it in the callout struct. */
-		/* FIXME: need do inspect content of the callout table. */
 		if (smash_delays->delays[i].dst == (unsigned int)dest && smash_delays->delays[i].src == (unsigned int)my_rank) {
 			smash_timeout(f, 6, smash_delays->delays[i].delay, &args);
 			return 0;
