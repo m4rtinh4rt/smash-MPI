@@ -66,7 +66,8 @@ smash_clock(void)
 
 		p1->c_time = ((p1->c_time - SMASH_CLOCK) < 0) ? 0 : p1->c_time - SMASH_CLOCK;
 		if (p1->c_time == 0 && p1->c_func != 0) {
-			/* This is called by multiple processes */
+			/* Then ignore for the next round, by setting a negative timeout */
+                        p1->c_time = -0xdead;
 			switch (p1->c_arg) {
 			case 6:
 				p1->c_func(p1->c_send_args.buf, p1->c_send_args.count,
@@ -78,8 +79,6 @@ smash_clock(void)
 				p1->c_func();
 				break;
 			}
-			/* Then ignore for the next round, by setting a negative timeout */
-                        p1->c_time = -0xdead;
 		}
 	}
 }

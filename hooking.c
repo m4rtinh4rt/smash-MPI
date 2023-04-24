@@ -13,15 +13,14 @@
 
 struct cfg_delays *smash_delays;
 struct cfg_failures *smash_failures;
-sem_t fault;
 int smash_alarm;
 unsigned int smash_my_rank;
 
 int
 smash_failure(void)
 {
-	sem_wait(&fault);
-	return 0;
+	MPI_Finalize();
+	exit(EXIT_FAILURE); /* TODO: handle real fault */
 }
 
 void *
@@ -87,15 +86,25 @@ MPI_Init(int *argc, char ***argv)
 	unsigned int i;
 	int (*f)(int *, char ***), res, rank;
 
+        /*
+         * TODO: real alarm logic
+         * set the alarm to top of the callout, reorder callout and remove
+         * old timeouts.
+         */
+
+        if (!smash_alarm) {
+		smash_setup_alarm();
+		smash_alarm = 1;
+	}
+
 	f = smash_get_lib_func(LIBMPI, "MPI_Init");
 	res = f(argc, argv);
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 	smash_my_rank = rank;
 
 	for (i = 0; i < smash_failures->size; ++i) {
-                if (smash_failures->failures[i].node == smash_my_rank) {
+                if (smash_failures->failures[i].node == smash_my_rank)
 			smash_timeout(smash_failure, 0, smash_failures->failures[i].time, NULL);
-		}
         }
 	return res;
 }
@@ -127,11 +136,6 @@ MPI_Ssend(const void *buf, int count, MPI_Datatype datatype, int dest,
 
 	f = smash_get_lib_func(LIBMPI, "MPI_Ssend");
 
-	if (!smash_alarm) {
-		smash_setup_alarm();
-		smash_alarm = 1;
-	}
-
 	for (i = 0; i < smash_delays->size; ++i) {
 		/* If a delay in the config file matches our rank and the target rank, inject it in the callout struct. */
                 if (smash_delays->delays[i].dst == (unsigned int)dest &&
@@ -160,11 +164,6 @@ MPI_Send(const void *buf, int count, MPI_Datatype datatype, int dest,
 	};
 
 	f = smash_get_lib_func(LIBMPI, "MPI_Send");
-
-	if (!smash_alarm) {
-		smash_setup_alarm();
-		smash_alarm = 1;
-	}
 
 	for (i = 0; i < smash_delays->size; ++i) {
 		/* If a delay in the config file matches our rank and the target rank, inject it in the callout struct. */
