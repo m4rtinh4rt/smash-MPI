@@ -144,7 +144,7 @@ MPI_Ssend(const void *buf, int count, MPI_Datatype datatype, int dest,
 			return 0;
                 }
         }
-	/* If there is no delay to apply, call MPI_Send directly. */
+	/* If there is no delay to apply, call MPI_Ssend directly. */
 	return f(buf, count, datatype, dest, tag, comm);
 }
 
