@@ -6,19 +6,23 @@
 #include <signal.h>
 #include <unistd.h>
 #include <stdio.h>
+#include <time.h>
 
 #include "callout.h"
 #include "hooking.h"
 #include "parser.h"
 
+int smash_alarm;
+timer_t smash_timer_id;
+unsigned int smash_my_rank;
 struct cfg_delays *smash_delays;
 struct cfg_failures *smash_failures;
-int smash_alarm;
-unsigned int smash_my_rank;
 
 int
 smash_failure(void)
 {
+	return 0; /* TODO: handle empty fault config */
+
 	MPI_Finalize();
 	exit(EXIT_FAILURE); /* TODO: handle real fault */
 }
@@ -44,17 +48,25 @@ smash_handler(__attribute__((unused)) int signum)
 	smash_clock();
 }
 
-void
+timer_t
 smash_setup_alarm(void)
 {
+	timer_t timerid;
 	struct sigaction sa;
+	struct sigevent sev;
 
 	sa.sa_handler = smash_handler;
 	sigemptyset(&sa.sa_mask);
 	sa.sa_flags = SA_RESTART;
-
 	sigaction(SIGALRM, &sa, NULL);
-	ualarm(SMASH_CLOCK, SMASH_CLOCK);
+
+	sev.sigev_notify = SIGEV_SIGNAL;
+	sev.sigev_signo = SIGALRM;
+	sev.sigev_value.sival_ptr = &timerid;
+	if (timer_create(CLOCK_REALTIME, &sev, &timerid) < 0)
+		errx(1, "timer_create");
+
+	return timerid;
 }
 
 int
@@ -86,14 +98,8 @@ MPI_Init(int *argc, char ***argv)
 	unsigned int i;
 	int (*f)(int *, char ***), res, rank;
 
-        /*
-         * TODO: real alarm logic
-         * set the alarm to top of the callout, reorder callout and remove
-         * old timeouts.
-         */
-
         if (!smash_alarm) {
-		smash_setup_alarm();
+		smash_timer_id = smash_setup_alarm();
 		smash_alarm = 1;
 	}
 
@@ -144,7 +150,7 @@ MPI_Ssend(const void *buf, int count, MPI_Datatype datatype, int dest,
 			return 0;
                 }
         }
-	/* If there is no delay to apply, call MPI_Send directly. */
+	/* If there is no delay to apply, call MPI_Ssend directly. */
 	return f(buf, count, datatype, dest, tag, comm);
 }
 

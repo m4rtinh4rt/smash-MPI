@@ -1,17 +1,13 @@
 #include "callout.h"
 
+#include <err.h>
 #include <stdio.h>
 #include <string.h>
 #include <semaphore.h>
+#include <time.h> 
 
 struct callo callout[NCALL] = { 0 };
-
-inline void
-smash_print_callo(struct callo *c)
-{
-	printf("c_time: %lli\nc_arg: %i\nc_func @ %p\n\n", c->c_time, c->c_arg,
-	       (void *)&c->c_func);
-}
+extern timer_t smash_timer_id;
 
 void
 smash_print_callout(void)
@@ -19,12 +15,15 @@ smash_print_callout(void)
 	size_t i;
 
 	for (i = 0; callout[i].c_func != NULL; ++i)
-		smash_print_callo(&callout[i]);
+		printf("c_time: %lli\nc_arg: %i\nc_func @ %p\n\n",
+		       callout[i].c_time, callout[i].c_arg,
+		       (void *)callout[i].c_func);
 }
 
 sem_t *
 smash_timeout(int (*func)(), int arg, int time, struct mpi_send_args *args)
 {
+	struct itimerspec its;
         struct callo *p1, *p2;
         int t;
 
@@ -50,6 +49,25 @@ smash_timeout(int (*func)(), int arg, int time, struct mpi_send_args *args)
         p1->c_arg = arg;
 	if (args != NULL)
 		memcpy(&p1->c_send_args, args, sizeof(struct mpi_send_args));
+
+	int s = t / 1000000;
+	int ns = t % 1000000;
+
+	if (s == 0 && ns == 0)
+		goto end;
+
+	/* TODO: remove debug */
+	printf("%d %d\n", s, ns);
+	its.it_value.tv_sec = s;
+	its.it_value.tv_nsec = ns;
+
+	its.it_interval.tv_sec = 0;
+	its.it_interval.tv_nsec = 0;
+
+	if (timer_settime(smash_timer_id, 0, &its, NULL) < 0)
+		err(1, "timer_settime");
+
+end:
 	return &p1->c_lock;
 }
 
@@ -60,25 +78,29 @@ smash_clock(void)
 
 	if (callout[0].c_func != 0) {
 		p1 = &callout[0];
-		/* Ignore tasks that have already run. */
-		while (p1->c_time == -0xdead && p1->c_func != 0)
-			p1++;
+		/* TODO: remove debug */
+		smash_print_callout();
 
-		p1->c_time = ((p1->c_time - SMASH_CLOCK) < 0) ? 0 : p1->c_time - SMASH_CLOCK;
-		if (p1->c_time == 0 && p1->c_func != 0) {
-			/* Then ignore for the next round, by setting a negative timeout */
-                        p1->c_time = -0xdead;
-			switch (p1->c_arg) {
-			case 6:
-				p1->c_func(p1->c_send_args.buf, p1->c_send_args.count,
-					   p1->c_send_args.datatype, p1->c_send_args.dest,
-					   p1->c_send_args.tag, p1->c_send_args.comm);
-				sem_post(&p1->c_lock);
-				break;
-			case 0:
-				p1->c_func();
-				break;
-			}
+		switch (p1->c_arg) {
+		case 6:
+			p1->c_func(p1->c_send_args.buf, p1->c_send_args.count,
+				   p1->c_send_args.datatype, p1->c_send_args.dest,
+				   p1->c_send_args.tag, p1->c_send_args.comm);
+			sem_post(&p1->c_lock);
+			break;
+		case 0:
+			p1->c_func();
+			break;
 		}
+
+		/* Remove the task. */
+		while ((p1+1)->c_func != NULL) {
+			p1->c_time = (p1+1)->c_time;
+			p1->c_func = (p1+1)->c_func;
+			p1->c_arg = (p1+1)->c_arg;
+			p1->c_send_args = (p1+1)->c_send_args;
+			p1++;
+		}
+		p1->c_func = NULL;
 	}
 }
