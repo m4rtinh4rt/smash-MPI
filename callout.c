@@ -23,9 +23,10 @@ smash_print_callout(void)
 sem_t *
 smash_timeout(int (*func)(), int arg, int time, struct mpi_send_args *args)
 {
+	int t, s, ns;
 	struct itimerspec its;
         struct callo *p1, *p2;
-        int t;
+
 
         t = time;
         p1 = &callout[0];
@@ -50,14 +51,12 @@ smash_timeout(int (*func)(), int arg, int time, struct mpi_send_args *args)
 	if (args != NULL)
 		memcpy(&p1->c_send_args, args, sizeof(struct mpi_send_args));
 
-	int s = t / 1000000;
-	int ns = t % 1000000;
+	s = t / 1000;
+	ns = (t % 1000) * 1000000;
 
 	if (s == 0 && ns == 0)
 		goto end;
 
-	/* TODO: remove debug */
-	printf("%d %d\n", s, ns);
 	its.it_value.tv_sec = s;
 	its.it_value.tv_nsec = ns;
 
@@ -78,8 +77,6 @@ smash_clock(void)
 
 	if (callout[0].c_func != 0) {
 		p1 = &callout[0];
-		/* TODO: remove debug */
-		smash_print_callout();
 
 		switch (p1->c_arg) {
 		case 6:

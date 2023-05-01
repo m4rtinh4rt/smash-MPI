@@ -2,7 +2,6 @@
 #define CALLOUT_H
 
 #define NCALL 256
-#define SMASH_CLOCK 100000 /* TODO: remove interval, jump to next timer directly */
 
 #include <mpi.h>
 #include <semaphore.h>
