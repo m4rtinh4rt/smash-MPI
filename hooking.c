@@ -21,14 +21,16 @@ struct cfg_failures *smash_failures;
 int
 smash_failure(void)
 {
-	int buf, world, recv = 0;
+	int buf, world;
 	MPI_Status status;
+	size_t recv = 0;
 
 	MPI_Comm_size(MPI_COMM_WORLD, &world);
 
-	while (recv < world - 1)
+	while (recv != world - smash_failures->size) {
 		MPI_Recv(&buf, 1, MPI_INT, MPI_ANY_SOURCE, 0xdead, MPI_COMM_WORLD, &status);
-	MPI_Finalize();
+		recv++;
+	}
 	return 0;
 }
 
