@@ -21,10 +21,15 @@ struct cfg_failures *smash_failures;
 int
 smash_failure(void)
 {
-	return 0; /* TODO: handle empty fault config */
+	int buf, world, recv = 0;
+	MPI_Status status;
 
+	MPI_Comm_size(MPI_COMM_WORLD, &world);
+
+	while (recv < world - 1)
+		MPI_Recv(&buf, 1, MPI_INT, MPI_ANY_SOURCE, 0xdead, MPI_COMM_WORLD, &status);
 	MPI_Finalize();
-	exit(EXIT_FAILURE); /* TODO: handle real fault */
+	return 0;
 }
 
 void *
@@ -119,6 +124,12 @@ int
 MPI_Finalize(void)
 {
 	int (*f)(void);
+	int world;
+	size_t i;
+
+	MPI_Comm_size(MPI_COMM_WORLD, &world);
+	for (i = 0; i < smash_failures->size; i++)
+		MPI_Send(&world, 1, MPI_INT, smash_failures->failures[i].node, 0xdead, MPI_COMM_WORLD);
 
 	free(smash_delays);
 	f = smash_get_lib_func(LIBMPI, "MPI_Finalize");
