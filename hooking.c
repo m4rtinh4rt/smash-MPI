@@ -12,6 +12,7 @@
 #include "hooking.h"
 #include "parser.h"
 
+int world_size;
 int smash_alarm;
 timer_t smash_timer_id;
 unsigned int smash_my_rank;
@@ -21,13 +22,11 @@ struct cfg_failures *smash_failures;
 int
 smash_failure(void)
 {
-	int buf, world;
+	int buf;
 	MPI_Status status;
 	size_t recv = 0;
 
-	MPI_Comm_size(MPI_COMM_WORLD, &world);
-
-	while (recv != world - smash_failures->size) {
+	while (recv != world_size - smash_failures->size) {
 		MPI_Recv(&buf, 1, MPI_INT, MPI_ANY_SOURCE, 0xdead, MPI_COMM_WORLD, &status);
 		recv++;
 	}
@@ -114,6 +113,7 @@ MPI_Init(int *argc, char ***argv)
 	res = f(argc, argv);
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 	smash_my_rank = rank;
+	MPI_Comm_size(MPI_COMM_WORLD, &world_size);
 
 	for (i = 0; i < smash_failures->size; ++i) {
                 if (smash_failures->failures[i].node == smash_my_rank)
@@ -126,14 +126,13 @@ int
 MPI_Finalize(void)
 {
 	int (*f)(void);
-	int world;
 	size_t i;
 
-	MPI_Comm_size(MPI_COMM_WORLD, &world);
 	for (i = 0; i < smash_failures->size; i++)
-		MPI_Send(&world, 1, MPI_INT, smash_failures->failures[i].node, 0xdead, MPI_COMM_WORLD);
+		MPI_Send(&world_size, 1, MPI_INT, smash_failures->failures[i].node, 0xdead, MPI_COMM_WORLD);
 
 	free(smash_delays);
+	free(smash_failures);
 	f = smash_get_lib_func(LIBMPI, "MPI_Finalize");
 	return f();
 }
