@@ -4,6 +4,7 @@
 #include <mpi.h>
 #include <stdlib.h>
 #include <signal.h>
+#include <string.h>
 #include <unistd.h>
 #include <stdio.h>
 #include <time.h>
@@ -12,19 +13,45 @@
 #include "hooking.h"
 #include "parser.h"
 
-int smash_alarm;
 timer_t smash_timer_id;
 unsigned int smash_my_rank;
+int smash_dead, smash_world_size, smash_alarm;
+
 struct cfg_delays *smash_delays;
 struct cfg_failures *smash_failures;
 
 int
 smash_failure(void)
 {
-	return 0; /* TODO: handle empty fault config */
+	printf("FAILURE %d", smash_my_rank);
+	int buf;
+	MPI_Status status;
+	size_t recv = 0;
+	int (*f)();
 
+	smash_dead = 1;
+	f = smash_get_lib_func(LIBMPI, "MPI_Recv");
+	while (recv != smash_world_size - smash_failures->size) {
+		f(&buf, 1, MPI_INT, MPI_ANY_SOURCE, 0xdead, MPI_COMM_WORLD, &status);
+		recv++;
+	}
 	MPI_Finalize();
-	exit(EXIT_FAILURE); /* TODO: handle real fault */
+	exit(0);
+}
+
+int
+MPI_Recv(void *buf, int count, MPI_Datatype datatype, int source, int tag,
+             MPI_Comm comm, MPI_Status *status) {
+	int (*f)(), res;
+
+	f = smash_get_lib_func(LIBMPI, "MPI_Recv");
+	while (1) {
+		res = f(buf, count, datatype, source, tag, comm, status);
+		if (status->MPI_TAG != 0xdead)
+			break;
+		bzero(status, sizeof(MPI_Status));
+	}
+	return res;
 }
 
 void *
@@ -89,6 +116,7 @@ __libc_start_main(
 
 	f = smash_get_lib_func(LIBSTD, "__libc_start_main");
 	smash_alarm = 0;
+	smash_dead = 0;
 	return f(main, argc, argv, init, fini, rtld_fini, stack_end);
 }
 
@@ -107,10 +135,12 @@ MPI_Init(int *argc, char ***argv)
 	res = f(argc, argv);
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 	smash_my_rank = rank;
+	MPI_Comm_size(MPI_COMM_WORLD, &smash_world_size);
 
 	for (i = 0; i < smash_failures->size; ++i) {
-                if (smash_failures->failures[i].node == smash_my_rank)
+                if (smash_failures->failures[i].node == smash_my_rank) {
 			smash_timeout(smash_failure, 0, smash_failures->failures[i].time, NULL);
+		}
         }
 	return res;
 }
@@ -119,8 +149,15 @@ int
 MPI_Finalize(void)
 {
 	int (*f)(void);
+	size_t i;
+
+	if (!smash_dead) {
+		for (i = 0; i < smash_failures->size; i++)
+			MPI_Send(&smash_world_size, 1, MPI_INT, smash_failures->failures[i].node, 0xdead, MPI_COMM_WORLD);
+	}
 
 	free(smash_delays);
+	free(smash_failures);
 	f = smash_get_lib_func(LIBMPI, "MPI_Finalize");
 	return f();
 }
