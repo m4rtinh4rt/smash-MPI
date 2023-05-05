@@ -148,18 +148,20 @@ MPI_Init(int *argc, char ***argv)
 int
 MPI_Finalize(void)
 {
-	int (*f)(void);
+	int (*f)();
+	int (*f2)(void);
 	size_t i;
 
+	f = smash_get_lib_func(LIBMPI, "MPI_Send");
 	if (!smash_dead) {
 		for (i = 0; i < smash_failures->size; i++)
-			MPI_Send(&smash_world_size, 1, MPI_INT, smash_failures->failures[i].node, 0xdead, MPI_COMM_WORLD);
+			f(&smash_world_size, 1, MPI_INT, smash_failures->failures[i].node, 0xdead, MPI_COMM_WORLD);
 	}
 
 	free(smash_delays);
 	free(smash_failures);
-	f = smash_get_lib_func(LIBMPI, "MPI_Finalize");
-	return f();
+	f2 = smash_get_lib_func(LIBMPI, "MPI_Finalize");
+	return f2();
 }
 
 int
