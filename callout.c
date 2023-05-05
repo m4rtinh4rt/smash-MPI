@@ -51,6 +51,8 @@ smash_timeout(int (*func)(), int arg, int time, struct mpi_send_args *args)
 	if (args != NULL)
 		memcpy(&p1->c_send_args, args, sizeof(struct mpi_send_args));
 
+	t = callout[0].c_time;
+
 	s = t / 1000;
 	ns = (t % 1000) * 1000000;
 
