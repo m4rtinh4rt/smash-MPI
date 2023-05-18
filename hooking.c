@@ -108,10 +108,10 @@ __libc_start_main(
 {
 	int (*f)();
 
-	if (!(smash_delays = smash_parse_cfg(CFG_DELAY)))
+	if (smash_parse_cfg(CFG_DELAY, (void **)&smash_delays) < 0)
 		errx(EXIT_FAILURE, "error in CFG_DELAY\n");
 
-	if (!(smash_failures = smash_parse_cfg(CFG_FAILURE)))
+	if (smash_parse_cfg(CFG_FAILURE, (void **)&smash_failures) < 0)
 		errx(EXIT_FAILURE, "error in CFG_FAILURE\n");
 
 	f = smash_get_lib_func(LIBSTD, "__libc_start_main");
@@ -137,11 +137,13 @@ MPI_Init(int *argc, char ***argv)
 	smash_my_rank = rank;
 	MPI_Comm_size(MPI_COMM_WORLD, &smash_world_size);
 
-	for (i = 0; i < smash_failures->size; ++i) {
-                if (smash_failures->failures[i].node == smash_my_rank) {
-			smash_timeout(smash_failure, 0, smash_failures->failures[i].time, NULL);
+	if (smash_failures != NULL) {
+		for (i = 0; i < smash_failures->size; ++i) {
+			if (smash_failures->failures[i].node == smash_my_rank) {
+				smash_timeout(smash_failure, 0, smash_failures->failures[i].time, NULL);
+			}
 		}
-        }
+	}
 	return res;
 }
 
@@ -151,9 +153,11 @@ MPI_Finalize(void)
 	int (*f)(void);
 	size_t i;
 
-	if (!smash_dead) {
-		for (i = 0; i < smash_failures->size; i++)
-			MPI_Send(&smash_world_size, 1, MPI_INT, smash_failures->failures[i].node, 0xdead, MPI_COMM_WORLD);
+	if (smash_failures != NULL) {
+		if (!smash_dead) {
+			for (i = 0; i < smash_failures->size; i++)
+				MPI_Send(&smash_world_size, 1, MPI_INT, smash_failures->failures[i].node, 0xdead, MPI_COMM_WORLD);
+		}
 	}
 
 	free(smash_delays);
