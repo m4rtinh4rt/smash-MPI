@@ -173,21 +173,25 @@ MPI_Ssend(const void *buf, int count, MPI_Datatype datatype, int dest,
 	int (*f)();
 	unsigned int i;
 	struct mpi_send_args args = {
-		.buf = (void *)buf,
 		.count = count,
 		.datatype = datatype,
 		.dest = dest,
 		.tag = tag,
 		.comm = comm,
 	};
+	args.buf = malloc(sizeof(buf) * count);
+	memcpy(args.buf, buf, count);
 
 	f = smash_get_lib_func(LIBMPI, "MPI_Ssend");
 
 	for (i = 0; i < smash_delays->size; ++i) {
 		/* If a delay in the config file matches our rank and the target rank, inject it in the callout struct. */
                 if (smash_delays->delays[i].dst == (unsigned int)dest &&
-                    smash_delays->delays[i].src == smash_my_rank) {
+                    smash_delays->delays[i].src == smash_my_rank &&
+		    (smash_delays->delays[i].msg > 0 ||
+		     smash_delays->delays[i].msg == -1)) {
                         sem_wait(smash_timeout(f, 6, smash_delays->delays[i].delay, &args));
+			smash_delays->delays[i].msg -= 1 * (smash_delays->delays[i].msg != -1);
 			return 0;
                 }
         }
@@ -202,21 +206,25 @@ MPI_Send(const void *buf, int count, MPI_Datatype datatype, int dest,
 	int (*f)();
 	unsigned int i;
 	struct mpi_send_args args = {
-		.buf = (void *)buf,
 		.count = count,
 		.datatype = datatype,
 		.dest = dest,
 		.tag = tag,
 		.comm = comm,
 	};
+	args.buf = malloc(sizeof(buf) * count);
+	memcpy(args.buf, buf, count);
 
 	f = smash_get_lib_func(LIBMPI, "MPI_Send");
 
 	for (i = 0; i < smash_delays->size; ++i) {
 		/* If a delay in the config file matches our rank and the target rank, inject it in the callout struct. */
                 if (smash_delays->delays[i].dst == (unsigned int)dest &&
-                    smash_delays->delays[i].src ==smash_my_rank) {
+                    smash_delays->delays[i].src == smash_my_rank &&
+		    (smash_delays->delays[i].msg > 0 ||
+		     smash_delays->delays[i].msg == -1)) {
                         smash_timeout(f, 6, smash_delays->delays[i].delay, &args);
+			smash_delays->delays[i].msg -= 1 * (smash_delays->delays[i].msg != -1);
 			return 0;
                 }
         }
