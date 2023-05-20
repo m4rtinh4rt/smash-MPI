@@ -13,6 +13,8 @@
 #include "hooking.h"
 #include "parser.h"
 
+#define SMASH_GRAPH 0x1234
+
 timer_t smash_timer_id;
 unsigned int smash_my_rank;
 int smash_dead, smash_world_size, smash_alarm;
@@ -20,10 +22,18 @@ int smash_dead, smash_world_size, smash_alarm;
 struct cfg_delays *smash_delays;
 struct cfg_failures *smash_failures;
 
+struct smash_graph_msg {
+	int src, dst;
+};
+
+struct smash_graph_msgs {
+	size_t i;
+	struct smash_graph_msg msgs[4096];
+} smash_graph_msgs;
+
 int
 smash_failure(void)
 {
-	printf("FAILURE %d", smash_my_rank);
 	int buf;
 	MPI_Status status;
 	size_t recv = 0;
@@ -47,7 +57,7 @@ MPI_Recv(void *buf, int count, MPI_Datatype datatype, int source, int tag,
 	f = smash_get_lib_func(LIBMPI, "MPI_Recv");
 	while (1) {
 		res = f(buf, count, datatype, source, tag, comm, status);
-		if (status->MPI_TAG != 0xdead)
+		if (status->MPI_TAG != 0xdead || status->MPI_TAG != SMASH_GRAPH)
 			break;
 		bzero(status, sizeof(MPI_Status));
 	}
@@ -131,6 +141,8 @@ MPI_Init(int *argc, char ***argv)
 		smash_alarm = 1;
 	}
 
+	smash_graph_msgs.i = 0;
+
 	f = smash_get_lib_func(LIBMPI, "MPI_Init");
 	res = f(argc, argv);
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
@@ -151,13 +163,46 @@ int
 MPI_Finalize(void)
 {
 	int (*f)(void);
-	size_t i;
+	size_t i, j;
+	int (*ssend)();
+	int (*recv)();
 
 	if (smash_failures != NULL) {
 		if (!smash_dead) {
 			for (i = 0; i < smash_failures->size; i++)
 				MPI_Send(&smash_world_size, 1, MPI_INT, smash_failures->failures[i].node, 0xdead, MPI_COMM_WORLD);
 		}
+	}
+
+
+	recv = smash_get_lib_func(LIBMPI, "MPI_Recv");
+	ssend = smash_get_lib_func(LIBMPI, "MPI_Ssend");
+	if (smash_my_rank == 0) {
+		struct smash_graph_msgs tmp = {0};
+		MPI_Status status;
+		for (i = 0; i < (unsigned int)smash_world_size - 1; ++i) {
+			recv(&tmp, sizeof(struct smash_graph_msgs), MPI_CHAR,
+			     MPI_ANY_SOURCE, SMASH_GRAPH, MPI_COMM_WORLD,
+			     &status);
+
+			for (j = 0; j < tmp.i; ++j) {
+				smash_graph_msgs.msgs[smash_graph_msgs.i].src = tmp.msgs[j].src;
+				smash_graph_msgs.msgs[smash_graph_msgs.i].dst = tmp.msgs[j].dst;
+				smash_graph_msgs.i++;
+			}
+		}
+		/* Output graph */
+		printf("digraph G {\n layout=twopi\n ranksep=3;\n ratio=auto;\n\"p1\" [ color=\"red\" ];\n");
+		for (i = 0; i < smash_graph_msgs.i; ++i) {
+			printf("\"p%d\" -> \"p%d\" [ color=\"purple\" ];\n",
+			       smash_graph_msgs.msgs[i].src,
+			       smash_graph_msgs.msgs[i].dst);
+		}
+		puts("}");
+		fflush(stdout);
+	} else {
+		ssend(&smash_graph_msgs, sizeof(struct smash_graph_msgs),
+		     MPI_CHAR, 0, SMASH_GRAPH, MPI_COMM_WORLD);
 	}
 
 	free(smash_delays);
@@ -180,6 +225,10 @@ MPI_Ssend(const void *buf, int count, MPI_Datatype datatype, int dest,
 		.tag = tag,
 		.comm = comm,
 	};
+
+	smash_graph_msgs.msgs[smash_graph_msgs.i].src = smash_my_rank;
+	smash_graph_msgs.msgs[smash_graph_msgs.i].dst = dest;
+	smash_graph_msgs.i++;
 
 	f = smash_get_lib_func(LIBMPI, "MPI_Ssend");
 
@@ -209,6 +258,10 @@ MPI_Send(const void *buf, int count, MPI_Datatype datatype, int dest,
 		.tag = tag,
 		.comm = comm,
 	};
+
+	smash_graph_msgs.msgs[smash_graph_msgs.i].src = smash_my_rank;
+	smash_graph_msgs.msgs[smash_graph_msgs.i].dst = dest;
+	smash_graph_msgs.i++;
 
 	f = smash_get_lib_func(LIBMPI, "MPI_Send");
 
