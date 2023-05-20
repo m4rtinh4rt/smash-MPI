@@ -55,12 +55,18 @@ MPI_Recv(void *buf, int count, MPI_Datatype datatype, int source, int tag,
 	int (*f)(), res;
 
 	f = smash_get_lib_func(LIBMPI, "MPI_Recv");
+
 	while (1) {
 		res = f(buf, count, datatype, source, tag, comm, status);
 		if (status->MPI_TAG != 0xdead || status->MPI_TAG != SMASH_GRAPH)
 			break;
 		bzero(status, sizeof(MPI_Status));
 	}
+
+	smash_graph_msgs.msgs[smash_graph_msgs.i].src = status->MPI_SOURCE;
+	smash_graph_msgs.msgs[smash_graph_msgs.i].dst = smash_my_rank;
+	smash_graph_msgs.i++;
+
 	return res;
 }
 
@@ -192,7 +198,7 @@ MPI_Finalize(void)
 			}
 		}
 		/* Output graph */
-		printf("digraph G {\n layout=twopi\n ranksep=3;\n ratio=auto;\n\"p1\" [ color=\"red\" ];\n");
+		printf("digraph SMASH_MPI {\n layout=twopi\n ranksep=3;\n ratio=auto;\n");
 		for (i = 0; i < smash_graph_msgs.i; ++i) {
 			printf("\"p%d\" -> \"p%d\" [ color=\"purple\" ];\n",
 			       smash_graph_msgs.msgs[i].src,
@@ -226,10 +232,6 @@ MPI_Ssend(const void *buf, int count, MPI_Datatype datatype, int dest,
 		.comm = comm,
 	};
 
-	smash_graph_msgs.msgs[smash_graph_msgs.i].src = smash_my_rank;
-	smash_graph_msgs.msgs[smash_graph_msgs.i].dst = dest;
-	smash_graph_msgs.i++;
-
 	f = smash_get_lib_func(LIBMPI, "MPI_Ssend");
 
 	for (i = 0; i < smash_delays->size; ++i) {
@@ -259,16 +261,12 @@ MPI_Send(const void *buf, int count, MPI_Datatype datatype, int dest,
 		.comm = comm,
 	};
 
-	smash_graph_msgs.msgs[smash_graph_msgs.i].src = smash_my_rank;
-	smash_graph_msgs.msgs[smash_graph_msgs.i].dst = dest;
-	smash_graph_msgs.i++;
-
 	f = smash_get_lib_func(LIBMPI, "MPI_Send");
 
 	for (i = 0; i < smash_delays->size; ++i) {
 		/* If a delay in the config file matches our rank and the target rank, inject it in the callout struct. */
                 if (smash_delays->delays[i].dst == (unsigned int)dest &&
-                    smash_delays->delays[i].src ==smash_my_rank) {
+                    smash_delays->delays[i].src == smash_my_rank) {
                         smash_timeout(f, 6, smash_delays->delays[i].delay, &args);
 			return 0;
                 }
