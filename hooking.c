@@ -59,7 +59,7 @@ MPI_Recv(void *buf, int count, MPI_Datatype datatype, int source, int tag,
 
 	while (1) {
 		res = f(buf, count, datatype, source, tag, comm, status);
-		if (status->MPI_TAG != 0xdead || status->MPI_TAG != SMASH_GRAPH)
+		if (status->MPI_TAG != 0xdead)
 			break;
 		bzero(status, sizeof(MPI_Status));
 	}
@@ -236,7 +236,7 @@ MPI_Ssend(const void *buf, int count, MPI_Datatype datatype, int dest,
 		.comm = comm,
 	};
 	args.buf = malloc(sizeof(buf) * count);
-	memcpy(args.buf, buf, count);
+	memcpy(args.buf, buf, sizeof(buf) * count);
 
 	f = smash_get_lib_func(LIBMPI, "MPI_Ssend");
 
@@ -269,7 +269,10 @@ MPI_Send(const void *buf, int count, MPI_Datatype datatype, int dest,
 		.comm = comm,
 	};
 	args.buf = malloc(sizeof(buf) * count);
-	memcpy(args.buf, buf, count);
+	memcpy(args.buf, buf, sizeof(buf) * count);
+
+	printf("%ld = %ld\n", *(long *)args.buf, *(long *)buf);
+	fflush(stdout);
 
 	f = smash_get_lib_func(LIBMPI, "MPI_Send");
 
