@@ -31,6 +31,7 @@ struct smash_graph_msgs {
 	struct smash_graph_msg msgs[4096];
 } smash_graph_msgs;
 
+static int master_done = 0;
 
 int
 smash_failure(void)
@@ -59,9 +60,10 @@ MPI_Recv(void *buf, int count, MPI_Datatype datatype, int source, int tag,
 
 	while (1) {
 		res = f(buf, count, datatype, source, tag, comm, status);
-		if (status->MPI_TAG != 0xdead)
+		if (status->MPI_TAG != 0xdead || status->MPI_TAG != SMASH_GRAPH)
 			break;
 		bzero(status, sizeof(MPI_Status));
+		master_done = status->MPI_TAG == SMASH_GRAPH;
 	}
 
 	smash_graph_msgs.msgs[smash_graph_msgs.i].src = status->MPI_SOURCE;
@@ -211,7 +213,8 @@ MPI_Finalize(void)
 		puts("}");
 		fflush(stdout);
 	} else {
-		recv(&done, 1, MPI_INT, 0, SMASH_GRAPH, MPI_COMM_WORLD);
+		if (!master_done)
+			recv(&done, 1, MPI_INT, 0, SMASH_GRAPH, MPI_COMM_WORLD);
 		ssend(&smash_graph_msgs, sizeof(struct smash_graph_msgs),
 		     MPI_CHAR, 0, SMASH_GRAPH, MPI_COMM_WORLD);
 	}
@@ -270,9 +273,6 @@ MPI_Send(const void *buf, int count, MPI_Datatype datatype, int dest,
 	};
 	args.buf = malloc(sizeof(buf) * count);
 	memcpy(args.buf, buf, sizeof(buf) * count);
-
-	printf("%ld = %ld\n", *(long *)args.buf, *(long *)buf);
-	fflush(stdout);
 
 	f = smash_get_lib_func(LIBMPI, "MPI_Send");
 
