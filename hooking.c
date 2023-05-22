@@ -169,6 +169,31 @@ MPI_Init(int *argc, char ***argv)
 }
 
 int
+save_graph(struct smash_graph_msgs *m)
+{
+	FILE *fs;
+	size_t i;
+	char *filepath;
+
+	filepath = getenv("SMASH_MPI_GRAPH");
+	if (!filepath)
+		filepath = "graph.dot";
+
+	if (!(fs = fopen(filepath, "w+")))
+		return -1;
+
+	fprintf(fs, "digraph SMASH_MPI {\n layout=twopi\n ranksep=3;\n ratio=auto;\n");
+	for (i = 0; i < m->i; ++i) {
+		fprintf(fs, "\"p%d\" -> \"p%d\" [ color=\"purple\" ];\n",
+		       m->msgs[i].src,
+		       m->msgs[i].dst);
+	}
+	fprintf(fs, "}");
+	fflush(fs);
+	return 0;
+}
+
+int
 MPI_Finalize(void)
 {
 	int (*f)(void);
@@ -204,14 +229,7 @@ MPI_Finalize(void)
 			}
 		}
 		/* Output graph */
-		printf("digraph SMASH_MPI {\n layout=twopi\n ranksep=3;\n ratio=auto;\n");
-		for (i = 0; i < smash_graph_msgs.i; ++i) {
-			printf("\"p%d\" -> \"p%d\" [ color=\"purple\" ];\n",
-			       smash_graph_msgs.msgs[i].src,
-			       smash_graph_msgs.msgs[i].dst);
-		}
-		puts("}");
-		fflush(stdout);
+		save_graph(&smash_graph_msgs);
 	} else {
 		if (!master_done)
 			recv(&done, 1, MPI_INT, 0, SMASH_GRAPH, MPI_COMM_WORLD);
