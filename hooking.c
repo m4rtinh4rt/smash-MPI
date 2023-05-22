@@ -13,6 +13,8 @@
 #include "hooking.h"
 #include "parser.h"
 
+#define SMASH_GRAPH 0x1234
+
 timer_t smash_timer_id;
 unsigned int smash_my_rank;
 int smash_dead, smash_world_size, smash_alarm;
@@ -20,10 +22,20 @@ int smash_dead, smash_world_size, smash_alarm;
 struct cfg_delays *smash_delays;
 struct cfg_failures *smash_failures;
 
+struct smash_graph_msg {
+	int src, dst;
+};
+
+struct smash_graph_msgs {
+	size_t i;
+	struct smash_graph_msg msgs[4096];
+} smash_graph_msgs;
+
+static int master_done = 0;
+
 int
 smash_failure(void)
 {
-	printf("FAILURE %d", smash_my_rank);
 	int buf;
 	MPI_Status status;
 	size_t recv = 0;
@@ -45,12 +57,19 @@ MPI_Recv(void *buf, int count, MPI_Datatype datatype, int source, int tag,
 	int (*f)(), res;
 
 	f = smash_get_lib_func(LIBMPI, "MPI_Recv");
+
 	while (1) {
 		res = f(buf, count, datatype, source, tag, comm, status);
-		if (status->MPI_TAG != 0xdead)
+		if (status->MPI_TAG != 0xdead || status->MPI_TAG != SMASH_GRAPH)
 			break;
 		bzero(status, sizeof(MPI_Status));
+		master_done = status->MPI_TAG == SMASH_GRAPH;
 	}
+
+	smash_graph_msgs.msgs[smash_graph_msgs.i].src = status->MPI_SOURCE;
+	smash_graph_msgs.msgs[smash_graph_msgs.i].dst = smash_my_rank;
+	smash_graph_msgs.i++;
+
 	return res;
 }
 
@@ -131,6 +150,8 @@ MPI_Init(int *argc, char ***argv)
 		smash_alarm = 1;
 	}
 
+	smash_graph_msgs.i = 0;
+
 	f = smash_get_lib_func(LIBMPI, "MPI_Init");
 	res = f(argc, argv);
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
@@ -151,13 +172,51 @@ int
 MPI_Finalize(void)
 {
 	int (*f)(void);
-	size_t i;
+	size_t i, j;
+	int (*ssend)();
+	int (*recv)();
+
+	recv = smash_get_lib_func(LIBMPI, "MPI_Recv");
+	ssend = smash_get_lib_func(LIBMPI, "MPI_Ssend");
 
 	if (smash_failures != NULL) {
 		if (!smash_dead) {
 			for (i = 0; i < smash_failures->size; i++)
-				MPI_Send(&smash_world_size, 1, MPI_INT, smash_failures->failures[i].node, 0xdead, MPI_COMM_WORLD);
+				ssend(&smash_world_size, 1, MPI_INT, smash_failures->failures[i].node, 0xdead, MPI_COMM_WORLD);
 		}
+	}
+
+	int done;
+	if (smash_my_rank == 0) {
+		struct smash_graph_msgs tmp = {0};
+		MPI_Status status;
+		for (i = 1; i < (unsigned int)smash_world_size; ++i) {
+			done = 1;
+			ssend(&done, 1, MPI_INT, i, SMASH_GRAPH, MPI_COMM_WORLD, &status);
+			recv(&tmp, sizeof(struct smash_graph_msgs), MPI_CHAR,
+			     i, SMASH_GRAPH, MPI_COMM_WORLD,
+			     &status);
+
+			for (j = 0; j < tmp.i; ++j) {
+				smash_graph_msgs.msgs[smash_graph_msgs.i].src = tmp.msgs[j].src;
+				smash_graph_msgs.msgs[smash_graph_msgs.i].dst = tmp.msgs[j].dst;
+				smash_graph_msgs.i++;
+			}
+		}
+		/* Output graph */
+		printf("digraph SMASH_MPI {\n layout=twopi\n ranksep=3;\n ratio=auto;\n");
+		for (i = 0; i < smash_graph_msgs.i; ++i) {
+			printf("\"p%d\" -> \"p%d\" [ color=\"purple\" ];\n",
+			       smash_graph_msgs.msgs[i].src,
+			       smash_graph_msgs.msgs[i].dst);
+		}
+		puts("}");
+		fflush(stdout);
+	} else {
+		if (!master_done)
+			recv(&done, 1, MPI_INT, 0, SMASH_GRAPH, MPI_COMM_WORLD);
+		ssend(&smash_graph_msgs, sizeof(struct smash_graph_msgs),
+		     MPI_CHAR, 0, SMASH_GRAPH, MPI_COMM_WORLD);
 	}
 
 	free(smash_delays);
@@ -173,21 +232,25 @@ MPI_Ssend(const void *buf, int count, MPI_Datatype datatype, int dest,
 	int (*f)();
 	unsigned int i;
 	struct mpi_send_args args = {
-		.buf = (void *)buf,
 		.count = count,
 		.datatype = datatype,
 		.dest = dest,
 		.tag = tag,
 		.comm = comm,
 	};
+	args.buf = malloc(sizeof(buf) * count);
+	memcpy(args.buf, buf, sizeof(buf) * count);
 
 	f = smash_get_lib_func(LIBMPI, "MPI_Ssend");
 
 	for (i = 0; i < smash_delays->size; ++i) {
 		/* If a delay in the config file matches our rank and the target rank, inject it in the callout struct. */
                 if (smash_delays->delays[i].dst == (unsigned int)dest &&
-                    smash_delays->delays[i].src == smash_my_rank) {
+                    smash_delays->delays[i].src == smash_my_rank &&
+		    (smash_delays->delays[i].msg > 0 ||
+		     smash_delays->delays[i].msg == -1)) {
                         sem_wait(smash_timeout(f, 6, smash_delays->delays[i].delay, &args));
+			smash_delays->delays[i].msg -= 1 * (smash_delays->delays[i].msg != -1);
 			return 0;
                 }
         }
@@ -202,21 +265,25 @@ MPI_Send(const void *buf, int count, MPI_Datatype datatype, int dest,
 	int (*f)();
 	unsigned int i;
 	struct mpi_send_args args = {
-		.buf = (void *)buf,
 		.count = count,
 		.datatype = datatype,
 		.dest = dest,
 		.tag = tag,
 		.comm = comm,
 	};
+	args.buf = malloc(sizeof(buf) * count);
+	memcpy(args.buf, buf, sizeof(buf) * count);
 
 	f = smash_get_lib_func(LIBMPI, "MPI_Send");
 
 	for (i = 0; i < smash_delays->size; ++i) {
 		/* If a delay in the config file matches our rank and the target rank, inject it in the callout struct. */
                 if (smash_delays->delays[i].dst == (unsigned int)dest &&
-                    smash_delays->delays[i].src ==smash_my_rank) {
+                    smash_delays->delays[i].src == smash_my_rank &&
+		    (smash_delays->delays[i].msg > 0 ||
+		     smash_delays->delays[i].msg == -1)) {
                         smash_timeout(f, 6, smash_delays->delays[i].delay, &args);
+			smash_delays->delays[i].msg -= 1 * (smash_delays->delays[i].msg != -1);
 			return 0;
                 }
         }
